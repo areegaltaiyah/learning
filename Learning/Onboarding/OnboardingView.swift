@@ -10,14 +10,15 @@ struct OnboardingView: View {
     var body: some View {
             
             VStack {
-                // ---The fire circle---
-                ZStack{
-                    
-                    Image(systemName: "flame.fill").foregroundStyle(Color.orange)
-                        .font(Font.system(size: 36))
-                        .frame(width:109 ,height: 109)
-                        .glassEffect(.clear.tint(.orangey.opacity(0.05)))
-                }
+                
+                    ZStack{
+                        
+                        Image(systemName: "flame.fill").foregroundStyle(Color.orange)
+                            .font(Font.system(size: 36))
+                            .frame(width:109 ,height: 109)
+                            .glassEffect(.clear.tint(.orangey.opacity(0.05)))
+                    }.padding(.top, 40)
+                
                 
                 
                 Spacer().frame(height: 47)
@@ -45,18 +46,22 @@ struct OnboardingView: View {
                         TextField("Swift", text: .constant(""))
                     }
                     
-                    Spacer().frame(height: 47)
+                    Spacer().frame(height: 24)
 
                     
                     // Choose duration
                     VStack(alignment: .leading){
                         Text("I want to learn it in a")
+                        
+                        Spacer().frame(height: 12)
+
+                        
                         // Duration buttons group
-                        HStack{
+                        HStack(spacing:8){
                             Button("Week") { }
                                 .frame(width:97 ,height: 48)
                                 .foregroundStyle(Color.white)
-                                .glassEffect(.clear.interactive())
+                                .glassEffect(.clear.interactive().tint(Color.orangey))
                             
                             Button("Month") { }
                                 .frame(width:97 ,height: 48)
