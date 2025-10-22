@@ -48,7 +48,7 @@ struct CurrentCard: View {
             HStack {
                 Spacer().frame(width: 12)
                 VStack (alignment:.leading) {
-                    CalendarView()
+                    CalendarHorizontalView()
                     Spacer().frame(height: 12)
                     Divider()
                     Spacer().frame(height: 11.5)
@@ -101,7 +101,7 @@ struct CurrentNavigation: View {
 }
 
 //Calendar Struct
-struct CalendarView: View {
+struct CalendarHorizontalView: View {
     @State private var date = Date()
     
     var body: some View {
