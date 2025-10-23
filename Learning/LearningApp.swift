@@ -9,10 +9,12 @@ import SwiftUI
 
 @main
 struct LearningApp: App {
+    @StateObject private var onboardingViewModel = OnboardingViewModel()
+
     var body: some Scene {
         WindowGroup {
             OnboardingView()
+                .environmentObject(onboardingViewModel)
         }
     }
 }
-

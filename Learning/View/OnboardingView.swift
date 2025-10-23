@@ -11,65 +11,53 @@ struct OnboardingView: View {
     @State private var navigateNext = false
 
     var body: some View {
-            
         NavigationStack {
-                VStack {
-                    ZStack{
-                        
-                        Image(systemName: "flame.fill").foregroundStyle(Color.orange)
-                            .font(Font.system(size: 36))
-                            .frame(width:109 ,height: 109)
-                            .glassEffect(.clear.tint(.flameBG))
-                          
-                        
-                        
-                    }.padding(.top, 40)
-                    
-                    
-                    
-                    Spacer().frame(height: 47)
-                    
-                    
-                    // ---Left-aligned content---
+            VStack {
+                ZStack{
+                    Image(systemName: "flame.fill").foregroundStyle(Color.orange)
+                        .font(Font.system(size: 36))
+                        .frame(width:109 ,height: 109)
+                        .glassEffect(.clear.tint(.flameBG))
+                }.padding(.top, 40)
+                
+                Spacer().frame(height: 47)
+                
+                // ---Left-aligned content---
+                VStack(alignment: .leading){
+                    //---Hello learner and more---
                     VStack(alignment: .leading){
-                        //---Hello learner and more---
-                        VStack(alignment: .leading){
-                            Text("Hello Learner")
-                                .bold()
-                                .font(Font.system(size:34))
-                            Text("This app will help you learn everyday!").foregroundStyle(Color.secondary)
-                                .font(Font.system(size: 17))
-                            
-                        }
-                        
-                        
-                        Spacer().frame(height: 31)
-                        
-                        
-                        UserGoal(viewModel: viewModel)
-                        
+                        Text("Hello Learner")
+                            .bold()
+                            .font(Font.system(size:34))
+                        Text("This app will help you learn everyday!").foregroundStyle(Color.secondary)
+                            .font(Font.system(size: 17))
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
                     
-                    Spacer()
+                    Spacer().frame(height: 31)
                     
-                    // Start Learning button
-                    Button("Start learning") {
-                        navigateNext = true
-                    }
-                    .fontWeight(.medium)
-                    .frame(width:182 ,height: 48)
-                    .foregroundStyle(Color.white)
-                    .glassEffect(.clear.tint(.orangey.opacity(0.8)).interactive())
+                    UserGoal(viewModel: viewModel)
                     
                 }
-                .navigationDestination(isPresented: $navigateNext){
-                    CurrentdayView().navigationBarBackButtonHidden(true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                
+                Spacer()
+                
+                // Start Learning button
+                Button("Start learning") {
+                    navigateNext = true
                 }
-        }
+                .fontWeight(.medium)
+                .frame(width:182 ,height: 48)
+                .foregroundStyle(Color.white)
+                .glassEffect(.clear.tint(.orangey.opacity(0.8)).interactive())
+            }
+            .navigationDestination(isPresented: $navigateNext){
+                CurrentdayView().navigationBarBackButtonHidden(true)
+            }
         }
     }
+}
 
 
 //-----------STRUCT-------------
@@ -77,41 +65,32 @@ struct UserGoal : View{
     @ObservedObject var viewModel : OnboardingViewModel
     
     var body: some View {
-        
-        
-        
         //---Textfield---
         VStack {
             VStack(alignment: .leading){
                 Text("I want to learn")
                     .font(Font.system(size: 22))
                 TextField("Swift", text: Binding(
-                    get: {viewModel.topic},
-                    set: {viewModel.updateTopic($0)}
-                                                 
-                                                 ))
+                    get: { viewModel.topic },
+                    set: { viewModel.updateTopic($0) }
+                ))
             }
         
-        Spacer().frame(height: 24)
+            Spacer().frame(height: 24)
 
-        
-        // Choose duration
-        VStack(alignment: .leading){
-            Text("I want to learn it in a")
-                .font(Font.system(size: 22))
-            
-            Spacer().frame(height: 12)
+            // Choose duration
+            VStack(alignment: .leading){
+                Text("I want to learn it in a")
+                    .font(Font.system(size: 22))
+                
+                Spacer().frame(height: 12)
 
-            
-            // Duration buttons group
-            TimeFilterView(viewModel: OnboardingViewModel()).frame(maxWidth:.infinity,alignment: .leading)
-
-            
+                
+                TimeFilterView(viewModel: viewModel)
+                    .frame(maxWidth:.infinity,alignment: .leading)
             }
         }
-
     }
-    
 }
     
 struct TimeFilterView: View {
@@ -124,7 +103,6 @@ struct TimeFilterView: View {
             durationButton("Year", freezes: 96)
         }
     }
-    
     
     private func durationButton(_ title: String, freezes: Int) -> some View {
         Button {
@@ -142,8 +120,6 @@ struct TimeFilterView: View {
         }
     }
 }
-
-
 
 #Preview {
     OnboardingView().preferredColorScheme(.dark)
