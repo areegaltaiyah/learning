@@ -17,8 +17,8 @@ struct CurrentdayView: View {
             Spacer().frame(height: 32)
 
             //BUTTON LOG AS LEARNED
-            //LearnedBIGbutton()
-            LearnedTodayBIGbutton()
+            LearnedBIGbutton()
+            //LearnedTodayBIGbutton()
             //DayFreezedBIGbutton()
            // WellDone()
             
@@ -26,8 +26,8 @@ struct CurrentdayView: View {
             Spacer().frame(height: 32)
 
             // BUTTON LOG AS FREEZED
-            //Freezedbutton()
-            FreezedbuttonOFF()
+            Freezedbutton()
+            //FreezedbuttonOFF()
             //SetlearningGoal()
             
             Text("1 out of 2 Freezes used")
@@ -46,7 +46,7 @@ struct CurrentCard: View {
     var body: some View {
         GlassEffectContainer {
             HStack {
-                Spacer().frame(width: 12)
+                //Spacer().frame(width: 12)
                 VStack (alignment:.leading) {
                     CalendarHorizontalView()
                     Spacer().frame(height: 12)
@@ -54,23 +54,25 @@ struct CurrentCard: View {
                     Spacer().frame(height: 11.5)
                     Text("Learning Swift")
                         .bold()
+                        .padding(.horizontal)
                     Spacer().frame(height: 12)
 
                     HStack{
+                        Spacer()
                         //Days learned
                         DaysLearned()
                         
-                        Spacer()
+                        Spacer().frame(width:13)
 
                         //Days freezed
                         
                         DaysFreezed()
-                        
+                        Spacer()
                     }
                     Spacer().frame(height: 12)
 
                 }
-                Spacer().frame(width: 12)
+               // Spacer().frame(width: 12)
             }
             
         }
@@ -102,54 +104,157 @@ struct CurrentNavigation: View {
 
 //Calendar Struct
 struct CalendarHorizontalView: View {
+    @State private var currentDate = Date()
+    // Keep a Date for the weekly view base
     @State private var date = Date()
+    @State private var showingDatePicker = false
+
+    // Custom month/year wheel state
+    @State private var selectedMonth: Int = Calendar.current.component(.month, from: Date()) - 1 // 0...11
+    @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
+ 
+    private var monthYear: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: currentDate)
+    }
+    
+    private var weekDays: [String] {
+        let formatter = DateFormatter()
+        return formatter.shortWeekdaySymbols // ["Sun","Mon",...]
+    }
+    
+    private var weekDates: [Date] {
+        let calendar = Calendar.current
+        let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: currentDate))!
+        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: startOfWeek) }
+    }
     
     var body: some View {
-        
-        VStack() {
-            Spacer().frame(height: 13)
+        VStack {
             HStack {
-                //Top part month and year
-                Text("October 2025").bold()
-                Image(systemName: "chevron.right").foregroundStyle(Color.orange).bold()
-                
-                Spacer()
-                Image(systemName: "chevron.left").foregroundStyle(Color.orange).bold()
-                Spacer().frame(width: 28)
-                Image(systemName: "chevron.right").foregroundStyle(Color.orange).bold()
-                
-                
-            }
-            Spacer().frame(height: 15)
-            let days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
-            let dates = ["20", "21", "22", "23", "24", "25", "26"]
-            
-            HStack(spacing: 12) {
-                ForEach(0..<days.count, id: \.self) { index in
-                    VStack {
-                        Text(days[index])
-                            .foregroundStyle(Color.greyish)
-                            .bold()
-                            .font(.subheadline)
-                            
-                        
-                        Text(dates[index])
-                            .foregroundStyle(Color.turqoisey)
-                            .bold()
-                            .padding(7)
-                            .background(
-                                Circle().fill(Color.darkTurqoise)
-                            )
-                            .font(.system(size: 24))
-                            
+                Text(monthYear).bold()
+                Button(action: {
+                    // Initialize wheels from currentDate whenever opening
+                    let comps = Calendar.current.dateComponents([.year, .month], from: currentDate)
+                    selectedMonth = (comps.month ?? 1) - 1
+                    selectedYear = comps.year ?? selectedYear
+                    showingDatePicker = true
+                }) {
+                    Image(systemName: showingDatePicker ? "chevron.down" : "chevron.right")
+                        .foregroundColor(.orange)
+                        .bold()
+                }
+                .popover(isPresented: $showingDatePicker, arrowEdge: .top) {
+                    VStack(spacing: 16) {
+                        HStack(spacing:0) {
+                            // Month wheel
+                            Picker("Month", selection: $selectedMonth) {
+                                ForEach(0..<12, id: \.self) { index in
+                                    Text(DateFormatter().monthSymbols[index]).tag(index)
+                                }
+                            }
+                            .pickerStyle(.wheel)
+                            .frame(maxWidth: .infinity)
+
+                            // Year wheel (before 2025 and forward, default to current year)
+                            let currentYear = Calendar.current.component(.year, from: Date())
+                            let lowerBoundYear = 1900 // adjust as needed
+                            Picker("Year", selection: $selectedYear) {
+                                ForEach(lowerBoundYear...(currentYear + 50), id: \.self) { year in
+                                    // Force plain string to avoid locale grouping separators like "2,025"
+                                    Text(String(year)).tag(year)
+                                }
+                            }
+                            .pickerStyle(.wheel)
+                            .frame(maxWidth: .infinity)
+                        }
+                        .labelsHidden()
+                        .onChange(of: selectedMonth) { _, _ in
+                            applyMonthYearSelection()
+                        }
+                        .onChange(of: selectedYear) { _, _ in
+                            applyMonthYearSelection()
+                        }
                     }
+                    .presentationCompactAdaptation(.popover)
+                    .padding()
+                }
+                Spacer()
+                
+                Button(action: { moveMonth(-1) }) {
+                    Image(systemName: "chevron.left")
+                        .foregroundColor(.orange)
+                        .bold()
+                }
+                Spacer().frame(width: 28)
+                
+                Button(action: { moveMonth(1) }) {
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(.orange)
+                        .bold()
                 }
             }
             
+            Spacer().frame(height: 15)
+            
+            HStack(spacing: 9) {
+                ForEach(0..<7, id: \.self) { index in
+                    let date = weekDates[index]
+                    VStack {
+                        Text(weekDays[Calendar.current.component(.weekday, from: date) - 1])
+                            .foregroundColor(Color.greyish)
+                            .bold()
+                            .font(.subheadline)
+                        
+                        Text("\(Calendar.current.component(.day, from: date))")
+                            .foregroundColor(Color.turqoisey)
+                            .bold()
+                            .font(.system(size: 25))
+                            .frame(width: 44,height:44)
+                            .background(
+                                Circle().fill(Color.darkTurqoise)
+                            )
+                    }
+                }
+            }
+        }
+        .padding()
+        // Keep the legacy date binding in sync if used elsewhere
+        .onChange(of: currentDate) { _, newValue in
+            date = firstDayOfMonth(for: newValue)
         }
     }
     
+    private func moveMonth(_ value: Int) {
+        if let newDate = Calendar.current.date(byAdding: .month, value: value, to: currentDate) {
+            currentDate = firstDayOfMonth(for: newDate)
+            // Keep the wheels in sync too
+            let comps = Calendar.current.dateComponents([.year, .month], from: currentDate)
+            selectedMonth = (comps.month ?? 1) - 1
+            selectedYear = comps.year ?? selectedYear
+        }
+    }
+    
+    private func firstDayOfMonth(for date: Date) -> Date {
+        let calendar = Calendar.current
+        let comps = calendar.dateComponents([.year, .month], from: date)
+        return calendar.date(from: comps) ?? date
+    }
+
+    private func applyMonthYearSelection() {
+        var comps = DateComponents()
+        comps.year = selectedYear
+        comps.month = selectedMonth + 1 // DateComponents months are 1-based
+        comps.day = 1
+        if let composed = Calendar.current.date(from: comps) {
+            currentDate = composed
+        }
+    }
 }
+
+
+
 
 //Days Learned Struct
 struct DaysLearned: View{
@@ -194,13 +299,13 @@ struct DaysFreezed: View{
 //Log as Learned button
 struct LearnedBIGbutton : View{
     var body: some View{
-        Button("Log as Learned") {
+        Button("Log as\nLearned") {
             /*@START_MENU_TOKEN@*//*@PLACEHOLDER=Action@*/ /*@END_MENU_TOKEN@*/
         }
         .bold()
         .foregroundStyle(Color.white)
-        .font(.system(size: 38))
-        .padding(100)
+        .font(.system(size: 36))
+        .frame(width:274,height:274)
         .background(
             Circle()
                 .fill(Color.orangey.opacity(0.95))

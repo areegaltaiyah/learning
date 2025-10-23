@@ -2,12 +2,15 @@ import SwiftUI
 
 struct LearningGoalView: View {
     @Environment(\.presentationMode) var presentationMode
-
+    @StateObject private var viewModel = OnboardingViewModel()
     var body: some View {
+        
+
             NavigationStack {
                 VStack {
                     Spacer().frame(height: 32)
-                  //  UserGoal().padding(.horizontal)
+                   UserGoal(viewModel: viewModel)
+                        .padding(.horizontal)
                     Spacer()
                     
                 }
