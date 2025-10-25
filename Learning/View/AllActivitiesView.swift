@@ -9,7 +9,7 @@ import SwiftUI
 
 struct ScrollingCalendarView: View {
     @StateObject private var viewModel = CalendarViewModel()
-    @Environment(\.presentationMode) private var presentationMode
+    @State private var navigateBack = false
 
     var body: some View {
         NavigationStack {
@@ -28,22 +28,26 @@ struct ScrollingCalendarView: View {
 
                         Spacer().frame(height: 24)
                     }
-                }.padding(.top,17.9)
+                }
+                .padding(.top,17.9)
             }
             .navigationTitle(Text("All activities")
                 .font(.system(size: 90, weight: .semibold)))
-           
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: {
-                        presentationMode.wrappedValue.dismiss()
+                        navigateBack = true
                     }) {
                         Image(systemName: "chevron.left")
                             .foregroundStyle(.white)
                     }
                 }
+            }
+            .navigationDestination(isPresented: $navigateBack) {
+                CurrentdayView()
+                    .navigationBarBackButtonHidden(true)
             }
         }
     }
@@ -93,16 +97,61 @@ struct CalendarDayView: View {
             Text("")
                 .frame(maxWidth: .infinity)
         } else {
-            ZStack {
-                Circle()
-                    .frame(width: 40, height: 40)
-                    .foregroundStyle(Color.orangey).opacity(0.2)
-                    .glassEffect()
+            let status = viewModel.status(for: date)
 
+            switch status {
+            case .todayPending:
+                ZStack {
+                    Circle()
+                        .frame(width: 40, height: 40)
+                        .foregroundStyle(Color.orangecircle)
+                        .glassEffect()
+                    Text("\(viewModel.dayNumber(from: date))")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundStyle(.white)
+                }
+                .frame(maxWidth: .infinity)
+
+            case .learned:
+             //   if viewModel.isToday(date) {
+                    // Learned today circle
+                    ZStack {
+                        Circle()
+                            .frame(width: 40, height: 40)
+                            .foregroundStyle(Color.darkOrange)
+                            .glassEffect()
+                        Text("\(viewModel.dayNumber(from: date))")
+                            .font(.system(size: 24, weight: .medium))
+                            .foregroundStyle(.orangecircle)
+                    }
+                    .frame(maxWidth: .infinity)
+                //}
+//                else {
+//                    // Other learned days: white text (as you had)
+//                    Text("\(viewModel.dayNumber(from: date))")
+//                        .font(.system(size: 24, weight: .medium))
+//                        .frame(maxWidth: .infinity)
+//                        .foregroundStyle(.white)
+//                }
+
+            case .frozen:
+                // Frozen day: turqoisey circle
+                ZStack {
+                    Circle()
+                        .frame(width: 40, height: 40)
+                        .foregroundStyle(Color.darkTurqoise)
+                        .glassEffect()
+                    Text("\(viewModel.dayNumber(from: date))")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundStyle(Color.turqoisey)
+                }
+                .frame(maxWidth: .infinity)
+
+            case .none:
                 Text("\(viewModel.dayNumber(from: date))")
                     .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(Color.orange)
-                    .padding(1)
+                    .frame(maxWidth: .infinity)
+                    .foregroundStyle(.primary)
             }
         }
     }

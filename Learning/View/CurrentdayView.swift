@@ -6,28 +6,159 @@
 //
 import SwiftUI
 
+// Local JSON helpers (no new files)
+private let jsonEncoder = JSONEncoder()
+private let jsonDecoder = JSONDecoder()
+
+private func encodeArray(_ array: [String]) -> Data {
+    (try? jsonEncoder.encode(array)) ?? Data()
+}
+private func decodeArray(_ data: Data) -> [String] {
+    (try? jsonDecoder.decode([String].self, from: data)) ?? []
+}
+
+private enum TodayState {
+    case normal            // can learn, can freeze (if any left)
+    case learnedToday      // today is already logged as learned
+    case frozenToday       // today is already frozen
+    case noFreezesLeft     // user has exhausted freezes (today not frozen/learned)
+}
+
 struct CurrentdayView: View {
+    // Legacy single-day storage (kept for migration/compatibility)
+    @AppStorage("lastFreezeDate") private var lastFreezeDate: String = ""
+    @AppStorage("freezesUsedCount") private var freezesUsedCount: Int = 0
+    @AppStorage("freezes") private var freezes: Int = 2
+
+    @AppStorage("lastLearnDate") private var lastLearnDate: String = ""
+    @AppStorage("daysLearnedCount") private var daysLearnedCount: Int = 0
+
+    // New JSON-backed arrays (kept in this file only)
+    @AppStorage("freezeDatesData") private var freezeDatesData: Data = Data()
+    @AppStorage("learnDatesData") private var learnDatesData: Data = Data()
+
+    // Computed accessors for arrays
+    private var freezeDates: [String] {
+        get { decodeArray(freezeDatesData) }
+        nonmutating set { freezeDatesData = encodeArray(newValue) }
+    }
+    private var learnDates: [String] {
+        get { decodeArray(learnDatesData) }
+        nonmutating set { learnDatesData = encodeArray(newValue) }
+    }
+
+    // One-time migration flag
+    @AppStorage("didMigrateSingleDatesToArrays") private var didMigrateSingleDatesToArrays: Bool = false
+
+    private var todayState: TodayState {
+        let key = todayKey()
+        // Learned takes precedence visually
+        if learnDates.contains(key) {
+            return .learnedToday
+        } else if freezeDates.contains(key) {
+            return .frozenToday
+        } else if freezeDates.count >= freezes {
+            return .noFreezesLeft
+        } else {
+            return .normal
+        }
+    }
+
     var body: some View {
         NavigationStack {
             VStack{
                 CurrentNavigation()
                 Spacer().frame(height: 24)
-                //Card
+
+                // Card
                 CurrentCard()
                 
                 Spacer().frame(height: 32)
                 
-                //BUTTON LOG AS LEARNED
-                LearnedBIGbutton()
+                // BIG BUTTON: driven by todayState
+                switch todayState {
+                case .learnedToday:
+                    LearnedTodayBIGbutton()
+                case .frozenToday:
+                    DayFreezedBIGbutton()
+                case .normal, .noFreezesLeft:
+                    // Pass bindings so the button can update arrays and counts
+                    LearnedBIGbutton(
+                        learnDates: Binding(
+                            get: { learnDates },
+                            set: { new in
+                                learnDates = new
+                                // Keep counter in sync with history
+                                daysLearnedCount = learnDates.count
+                                // Keep legacy lastLearnDate for compatibility
+                                lastLearnDate = learnDates.last ?? lastLearnDate
+                            }
+                        )
+                    )
+                }
                
                 Spacer().frame(height: 32)
                 
-                // BUTTON LOG AS FREEZED (dynamic enable/disable)
-                FreezedbuttonDynamic()
-                
-                freezesUsed()
+                // Small "Log as Freezed" button: enabled only in .normal
+                switch todayState {
+                case .normal:
+                    Freezedbutton(
+                        freezeDates: Binding(
+                            get: { freezeDates },
+                            set: { new in
+                                freezeDates = new
+                                // Keep counter in sync with history
+                                freezesUsedCount = freezeDates.count
+                                // Keep legacy lastFreezeDate for compatibility
+                                lastFreezeDate = freezeDates.last ?? lastFreezeDate
+                            }
+                        ),
+                        freezesLimit: freezes
+                    )
+                case .learnedToday, .frozenToday, .noFreezesLeft:
+                    FreezedbuttonOFF()
+                }
+
+                freezesUsedView(
+                    usedCount: freezeDates.count,
+                    total: freezes
+                )
+            }
+            .onAppear {
+                migrateIfNeeded()
+                // Ensure counters reflect arrays
+                daysLearnedCount = learnDates.count
+                freezesUsedCount = freezeDates.count
             }
         }
+    }
+
+    // Migrate legacy single-day keys into arrays (one time)
+    private func migrateIfNeeded() {
+        guard !didMigrateSingleDatesToArrays else { return }
+
+        var updatedFreeze = freezeDates
+        var updatedLearn = learnDates
+
+        if !lastFreezeDate.isEmpty && !updatedFreeze.contains(lastFreezeDate) {
+            updatedFreeze.append(lastFreezeDate)
+        }
+        if !lastLearnDate.isEmpty && !updatedLearn.contains(lastLearnDate) {
+            updatedLearn.append(lastLearnDate)
+        }
+
+        if updatedFreeze != freezeDates {
+            freezeDates = updatedFreeze
+        }
+        if updatedLearn != learnDates {
+            learnDates = updatedLearn
+        }
+
+        // Sync counts
+        freezesUsedCount = freezeDates.count
+        daysLearnedCount = learnDates.count
+
+        didMigrateSingleDatesToArrays = true
     }
 }
 //-------------------------Structs---------------------
@@ -215,19 +346,15 @@ struct CalendarHorizontalView: View {
             }
         }
         .padding()
-        // Keep the legacy date binding in sync if used elsewhere
+        
         .onChange(of: currentDate) { _, newValue in
             date = firstDayOfMonth(for: newValue)
         }
     }
     
     private func moveMonth(_ value: Int) {
-        if let newDate = Calendar.current.date(byAdding: .month, value: value, to: currentDate) {
-            currentDate = firstDayOfMonth(for: newDate)
-            // Keep the wheels in sync too
-            let comps = Calendar.current.dateComponents([.year, .month], from: currentDate)
-            selectedMonth = (comps.month ?? 1) - 1
-            selectedYear = comps.year ?? selectedYear
+        if let newDate = Calendar.current.date(byAdding: .weekOfYear, value: value, to: currentDate) {
+            currentDate = newDate
         }
     }
     
@@ -250,13 +377,17 @@ struct CalendarHorizontalView: View {
 
 //Days Learned Struct
 struct DaysLearned: View{
+    // Keep showing the synchronized counter (synced from learnDates.count)
+    @AppStorage("daysLearnedCount") var daysLearnedCount: Int = 0
+
     var body: some View{
         HStack{
             Spacer().frame(width: 12)
             Image(systemName: "flame.fill").foregroundStyle(Color.orange).font(Font.system(size: 20))
             VStack(alignment:.leading){
-                Text("3").bold().font(.system(size: 24))
-                Text("Days Learned").font(.system(size: 12))
+                Text("\(daysLearnedCount)").bold().font(.system(size: 24))
+                
+                Text(daysLearnedCount == 1 ? "Day Learned" : "Days Learned").font(.system(size: 12))
                 Spacer().frame(height: 6)
             }.frame(width: 78,height: 49)
             Spacer().frame(width: 12)
@@ -268,6 +399,7 @@ struct DaysLearned: View{
 
 //Days Freezed Struct
 struct DaysFreezed: View{
+    // Keep showing the synchronized counter (synced from freezeDates.count)
     @AppStorage("freezesUsedCount") var freezesUsedCount = 0
     @AppStorage("freezes") var freezes: Int = 2
 
@@ -277,7 +409,7 @@ struct DaysFreezed: View{
             Image(systemName: "cube.fill").foregroundStyle(Color.turqoisey).font(Font.system(size: 20))
             VStack(alignment:.leading){
                 Text("\(freezesUsedCount)").bold().font(.system(size: 24))
-                Text("Days Freezed").font(.system(size: 12))
+                Text(freezesUsedCount == 1 ? "Day Freezed" : "Days Freezed").font(.system(size: 12))
                 Spacer().frame(height: 6)
             }.frame(width: 78,height: 49)
             Spacer().frame(width: 14)
@@ -291,13 +423,19 @@ struct DaysFreezed: View{
 
 //Log as Learned button
 struct LearnedBIGbutton : View{
+    // We receive learnDates via Binding so we can update the array and let parent sync counts.
+    @Binding var learnDates: [String]
+
     var body: some View{
         Button("Log as\nLearned") {
-            /* Action */
+            let key = todayKey()
+            if !learnDates.contains(key) {
+                learnDates.append(key)
+            }
         }
         .bold()
         .foregroundStyle(Color.white)
-        .font(.system(size: 36))
+        .font(.system(size: 38))
         .frame(width:274,height:274)
         .background(
             Circle()
@@ -307,16 +445,16 @@ struct LearnedBIGbutton : View{
     }
 }
 
-//Learned today button
+//Learned today button (read-only)
 struct LearnedTodayBIGbutton : View{
     var body: some View{
-        Button("Learned Today") {
-            /* Action */
+        Button("Learned\nToday") {
+            // no-op; already logged for today
         }
         .bold()
         .foregroundStyle(Color.orange)
-        .font(.system(size: 38))
-        .padding(100)
+        .font(.system(size: 36))
+        .frame(width:274,height:274)
         .background(
             Circle()
                 .fill(Color.flameBG.opacity(0.95))
@@ -325,16 +463,16 @@ struct LearnedTodayBIGbutton : View{
     }
 }
 
-//Day freezed button
+//Day freezed button (read-only)
 struct DayFreezedBIGbutton : View{
     var body: some View{
-        Button("Day Freezed") {
-            /* Action */
+        Button("Day\nFreezed") {
+            // no-op; already frozen for today
         }
         .bold()
         .foregroundStyle(Color.turqoisey)
         .font(.system(size: 38))
-        .padding(100)
+        .frame(width:274,height:274)
         .background(
             Circle()
                 .fill(Color.blackTurq.opacity(0.95))
@@ -377,34 +515,19 @@ private func todayKey() -> String {
     return formatter.string(from: Date())
 }
 
-struct FreezedbuttonDynamic: View {
-    @AppStorage("freezesUsedCount") var freezesUsedCount = 0
-    @AppStorage("freezes") var freezes: Int = 2
-    @AppStorage("lastFreezeDate") private var lastFreezeDate: String = ""
-
-    var body: some View {
-        let key = todayKey()
-        let alreadyLoggedToday = lastFreezeDate == key || freezesUsedCount >= freezes
-
-        if alreadyLoggedToday {
-            FreezedbuttonOFF()
-        } else {
-            Freezedbutton()
-        }
-    }
-}
-
-//Log as freezed
+//Log as freezed (enabled)
 struct Freezedbutton: View {
-    @AppStorage("freezesUsedCount") var freezesUsedCount = 0
-    @AppStorage("freezes") var freezes: Int = 2
-    @AppStorage("lastFreezeDate") private var lastFreezeDate: String = ""
+    // Receive and update the array; parent keeps counts in sync
+    @Binding var freezeDates: [String]
+    var freezesLimit: Int
 
     var body: some View {
         Button("Log as Freezed") {
-            guard freezesUsedCount < freezes else { return }
-            freezesUsedCount += 1
-            lastFreezeDate = todayKey()
+            let key = todayKey()
+            guard freezeDates.count < freezesLimit else { return }
+            if !freezeDates.contains(key) {
+                freezeDates.append(key)
+            }
         }
         .foregroundStyle(Color.white)
         .font(.system(size: 17))
@@ -413,7 +536,7 @@ struct Freezedbutton: View {
     }
 }
 
-//Log as freezed OFF
+//Log as freezed OFF (disabled)
 struct FreezedbuttonOFF : View{
     var body: some View{
         Button("Log as Freezed") {
@@ -439,15 +562,16 @@ struct SetlearningGoal: View {
     }
 }
 
-struct freezesUsed : View {
-    @AppStorage("freezesUsedCount") var freezesUsedCount = 0
-    @AppStorage("freezes") var freezes: Int = 2
-    
-    var body: some View{
-        Text("\(freezesUsedCount) out of \(freezes) Freezes used")
-            .font(Font.system(size: 14))
-            .foregroundStyle(Color.greyish)
-    }
+// Text of remaining freezes 
+// Converted to a standalone view function so we can pass the used count from arrays
+@ViewBuilder
+private func freezesUsedView(usedCount: Int, total: Int) -> some View {
+    let usedWord = usedCount == 1 ? "Freeze" : "Freezes"
+    let totalWord = total == 1 ? "Freeze" : "Freezes"
+    Text("\(usedCount) out of \(total) \(totalWord) used")
+        .font(Font.system(size: 14))
+        .foregroundStyle(Color.greyish)
+        .accessibilityLabel("\(usedCount) \(usedWord) out of \(total) \(totalWord) used")
 }
 
 #Preview {

@@ -5,7 +5,6 @@
 //  Created by Areeg Altaiyah on 29/04/1447 AH.
 //
 
-
 //
 //  CalendarViewModel.swift
 //  Learning Tracking App
@@ -17,16 +16,57 @@ import Foundation
 import SwiftUI
 import Combine
 
+enum DayStatus {
+    case learned
+    case frozen
+    case todayPending
+    case none
+}
 
 class CalendarViewModel: ObservableObject {
     @Published var currentDate: Date = Date()
 
+    // Legacy single-day markers (kept for backward compatibility)
+    @AppStorage("lastLearnDate") private var lastLearnDate: String = ""
+    @AppStorage("lastFreezeDate") private var lastFreezeDate: String = ""
+
+    // New history arrays (as JSON Data of [String] keys "yyyy-MM-dd")
+    @AppStorage("learnDatesData") private var learnDatesData: Data = Data()
+    @AppStorage("freezeDatesData") private var freezeDatesData: Data = Data()
+
     private let calendar = Calendar.current
+
+    // Month title formatter (unchanged)
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM yyyy"
         return formatter
     }()
+
+    // Stable yyyy-MM-dd formatter for comparisons
+    private let keyFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar.current
+        formatter.locale = .current
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    // Decoding helpers
+    private func decodeArray(_ data: Data) -> [String] {
+        (try? JSONDecoder().decode([String].self, from: data)) ?? []
+    }
+
+    // Computed Sets for fast lookup
+    private var learnedSet: Set<String> {
+        let arr = decodeArray(learnDatesData)
+        return Set(arr)
+    }
+    private var frozenSet: Set<String> {
+        let arr = decodeArray(freezeDatesData)
+        return Set(arr)
+    }
 
     var months: [Date] {
         guard let startDate = calendar.date(byAdding: .month, value: -6, to: currentDate),
@@ -88,5 +128,44 @@ class CalendarViewModel: ObservableObject {
 
     func dayNumber(from date: Date) -> Int {
         return calendar.component(.day, from: date)
+    }
+
+    // MARK: - Status
+
+    private func key(for date: Date) -> String {
+        keyFormatter.string(from: date)
+    }
+
+    private var todayKey: String {
+        key(for: Date())
+    }
+
+    func status(for date: Date) -> DayStatus {
+        let k = key(for: date)
+
+        // Prefer array-backed history (all learned/frozen days)
+        let learned = learnedSet
+        let frozen = frozenSet
+
+        if learned.contains(k) {
+            return .learned
+        }
+        if frozen.contains(k) {
+            return .frozen
+        }
+
+        // Backward compatibility: if arrays are empty, fall back to legacy single-date keys
+        if learned.isEmpty && k == lastLearnDate {
+            return .learned
+        }
+        if frozen.isEmpty && k == lastFreezeDate {
+            return .frozen
+        }
+
+        if k == todayKey {
+            // Today and neither learned nor frozen yet -> pending
+            return .todayPending
+        }
+        return .none
     }
 }
