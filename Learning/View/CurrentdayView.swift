@@ -50,6 +50,9 @@ struct CurrentdayView: View {
     // One-time migration flag
     @AppStorage("didMigrateSingleDatesToArrays") private var didMigrateSingleDatesToArrays: Bool = false
 
+    // Calendar status source for the horizontal calendar (matches AllActivities)
+    @StateObject private var calendarVM = CalendarViewModel()
+
     private var todayState: TodayState {
         let key = todayKey()
         // Learned takes precedence visually
@@ -71,7 +74,7 @@ struct CurrentdayView: View {
                 Spacer().frame(height: 24)
 
                 // Card
-                CurrentCard()
+                CurrentCard(viewModel: calendarVM)
                 
                 Spacer().frame(height: 32)
                 
@@ -164,11 +167,13 @@ struct CurrentdayView: View {
 //-------------------------Structs---------------------
 //Card Struct
 struct CurrentCard: View {
+    let viewModel: CalendarViewModel
+
     var body: some View {
         GlassEffectContainer {
             HStack {
                 VStack (alignment:.leading) {
-                    CalendarHorizontalView()
+                    CalendarHorizontalView(viewModel: viewModel)
                     Spacer().frame(height: 12)
                     Divider()
                     Spacer().frame(height: 11.5)
@@ -198,7 +203,7 @@ struct Learningtopic: View {
     @AppStorage("topic") private var topic: String = ""
     
     var body: some View {
-        Text("Learning \(topic.isEmpty ? "…" : topic)")
+        Text("Learning \(topic.isEmpty ? "Swift" : topic)")
             .bold()
             .padding(.horizontal)
     }
@@ -230,6 +235,8 @@ struct CurrentNavigation: View {
 
 //Calendar Struct
 struct CalendarHorizontalView: View {
+    @ObservedObject var viewModel: CalendarViewModel
+
     @State private var currentDate = Date()
     // Keep a Date for the weekly view base
     @State private var date = Date()
@@ -327,20 +334,53 @@ struct CalendarHorizontalView: View {
             HStack(spacing: 9) {
                 ForEach(0..<7, id: \.self) { index in
                     let date = weekDates[index]
+                    let status = viewModel.status(for: date)
+
                     VStack {
                         Text(weekDays[Calendar.current.component(.weekday, from: date) - 1])
                             .foregroundColor(Color.greyish)
                             .bold()
                             .font(.subheadline)
-                        
-                        Text("\(Calendar.current.component(.day, from: date))")
-                            .foregroundColor(Color.turqoisey)
-                            .bold()
-                            .font(.system(size: 25))
-                            .frame(width: 44,height:44)
-                            .background(
-                                Circle().fill(Color.darkTurqoise)
-                            )
+
+                        // Match AllActivities circles and styles
+                        switch status {
+                        case .todayPending:
+                            ZStack {
+                                Circle()
+                                    .frame(width: 44, height: 44)
+                                    .foregroundStyle(Color.orangecircle)
+                                Text("\(Calendar.current.component(.day, from: date))")
+                                    .font(.system(size: 25, weight: .medium))
+                                    .foregroundStyle(.white)
+                            }
+
+                        case .learned:
+                            ZStack {
+                                Circle()
+                                    .frame(width: 44, height: 44)
+                                    .foregroundStyle(Color.darkOrange)
+                                Text("\(Calendar.current.component(.day, from: date))")
+                                    .font(.system(size: 25, weight: .medium))
+                                    .foregroundStyle(Color.orangecircle)
+                            }
+
+                        case .frozen:
+                            ZStack {
+                                Circle()
+                                    .frame(width: 44, height: 44)
+                                    .foregroundStyle(Color.darkTurqoise)
+                                Text("\(Calendar.current.component(.day, from: date))")
+                                    .font(.system(size: 25, weight: .medium))
+                                    .foregroundStyle(Color.turqoisey)
+                            }
+
+                        case .none:
+                            Text("\(Calendar.current.component(.day, from: date))")
+                                .bold()
+                                .font(.system(size: 25))
+                                .frame(width: 44, height: 44)
+                              
+                        }
                     }
                 }
             }
@@ -577,3 +617,4 @@ private func freezesUsedView(usedCount: Int, total: Int) -> some View {
 #Preview {
     CurrentdayView().preferredColorScheme(.dark)
 }
+
