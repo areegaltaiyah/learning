@@ -6,66 +6,10 @@
 //
 import SwiftUI
 
-// Local JSON helpers (no new files)
-private let jsonEncoder = JSONEncoder()
-private let jsonDecoder = JSONDecoder()
-
-private func encodeArray(_ array: [String]) -> Data {
-    (try? jsonEncoder.encode(array)) ?? Data()
-}
-private func decodeArray(_ data: Data) -> [String] {
-    (try? jsonDecoder.decode([String].self, from: data)) ?? []
-}
-
-private enum TodayState {
-    case normal            // can learn, can freeze (if any left)
-    case learnedToday      // today is already logged as learned
-    case frozenToday       // today is already frozen
-    case noFreezesLeft     // user has exhausted freezes (today not frozen/learned)
-}
-
 struct CurrentdayView: View {
-    // Legacy single-day storage (kept for migration/compatibility)
-    @AppStorage("lastFreezeDate") private var lastFreezeDate: String = ""
-    @AppStorage("freezesUsedCount") private var freezesUsedCount: Int = 0
-    @AppStorage("freezes") private var freezes: Int = 2
-
-    @AppStorage("lastLearnDate") private var lastLearnDate: String = ""
-    @AppStorage("daysLearnedCount") private var daysLearnedCount: Int = 0
-
-    // New JSON-backed arrays (kept in this file only)
-    @AppStorage("freezeDatesData") private var freezeDatesData: Data = Data()
-    @AppStorage("learnDatesData") private var learnDatesData: Data = Data()
-
-    // Computed accessors for arrays
-    private var freezeDates: [String] {
-        get { decodeArray(freezeDatesData) }
-        nonmutating set { freezeDatesData = encodeArray(newValue) }
-    }
-    private var learnDates: [String] {
-        get { decodeArray(learnDatesData) }
-        nonmutating set { learnDatesData = encodeArray(newValue) }
-    }
-
-    // One-time migration flag
-    @AppStorage("didMigrateSingleDatesToArrays") private var didMigrateSingleDatesToArrays: Bool = false
-
-    // Calendar status source for the horizontal calendar (matches AllActivities)
+    // ViewModels
+    @StateObject private var currentDayvm = CurrentDayViewModel()
     @StateObject private var calendarVM = CalendarViewModel()
-
-    private var todayState: TodayState {
-        let key = todayKey()
-        // Learned takes precedence visually
-        if learnDates.contains(key) {
-            return .learnedToday
-        } else if freezeDates.contains(key) {
-            return .frozenToday
-        } else if freezeDates.count >= freezes {
-            return .noFreezesLeft
-        } else {
-            return .normal
-        }
-    }
 
     var body: some View {
         NavigationStack {
@@ -78,92 +22,42 @@ struct CurrentdayView: View {
                 
                 Spacer().frame(height: 32)
                 
-                // BIG BUTTON: driven by todayState
-                switch todayState {
+                // BIG BUTTON
+                switch currentDayvm.todayState {
                 case .learnedToday:
                     LearnedTodayBIGbutton()
                 case .frozenToday:
                     DayFreezedBIGbutton()
                 case .normal, .noFreezesLeft:
-                    // Pass bindings so the button can update arrays and counts
-                    LearnedBIGbutton(
-                        learnDates: Binding(
-                            get: { learnDates },
-                            set: { new in
-                                learnDates = new
-                                // Keep counter in sync with history
-                                daysLearnedCount = learnDates.count
-                                // Keep legacy lastLearnDate for compatibility
-                                lastLearnDate = learnDates.last ?? lastLearnDate
-                            }
-                        )
-                    )
+                    LearnedBIGbutton(action: {
+                        currentDayvm.logLearnedToday()
+                    })
                 }
                
                 Spacer().frame(height: 32)
                 
-                // Small "Log as Freezed" button: enabled only in .normal
-                switch todayState {
+                // Small Button
+                switch currentDayvm.todayState {
                 case .normal:
-                    Freezedbutton(
-                        freezeDates: Binding(
-                            get: { freezeDates },
-                            set: { new in
-                                freezeDates = new
-                                // Keep counter in sync with history
-                                freezesUsedCount = freezeDates.count
-                                // Keep legacy lastFreezeDate for compatibility
-                                lastFreezeDate = freezeDates.last ?? lastFreezeDate
-                            }
-                        ),
-                        freezesLimit: freezes
-                    )
+                    Freezedbutton(action: {
+                        currentDayvm.logFreezedToday()
+                    })
                 case .learnedToday, .frozenToday, .noFreezesLeft:
                     FreezedbuttonOFF()
                 }
-
+                // Freezes count
                 freezesUsedView(
-                    usedCount: freezeDates.count,
-                    total: freezes
+                    usedCount: currentDayvm.freezesUsedCount,
+                    total: currentDayvm.freezesLimit
                 )
             }
             .onAppear {
-                migrateIfNeeded()
-                // Ensure counters reflect arrays
-                daysLearnedCount = learnDates.count
-                freezesUsedCount = freezeDates.count
+                currentDayvm.recomputeTodayState()
             }
         }
     }
-
-    // Migrate legacy single-day keys into arrays (one time)
-    private func migrateIfNeeded() {
-        guard !didMigrateSingleDatesToArrays else { return }
-
-        var updatedFreeze = freezeDates
-        var updatedLearn = learnDates
-
-        if !lastFreezeDate.isEmpty && !updatedFreeze.contains(lastFreezeDate) {
-            updatedFreeze.append(lastFreezeDate)
-        }
-        if !lastLearnDate.isEmpty && !updatedLearn.contains(lastLearnDate) {
-            updatedLearn.append(lastLearnDate)
-        }
-
-        if updatedFreeze != freezeDates {
-            freezeDates = updatedFreeze
-        }
-        if updatedLearn != learnDates {
-            learnDates = updatedLearn
-        }
-
-        // Sync counts
-        freezesUsedCount = freezeDates.count
-        daysLearnedCount = learnDates.count
-
-        didMigrateSingleDatesToArrays = true
-    }
 }
+
 //-------------------------Structs---------------------
 //Card Struct
 struct CurrentCard: View {
@@ -198,6 +92,7 @@ struct CurrentCard: View {
         .glassEffect(.clear,in:.rect(cornerRadius: 10))
     }
 }
+
 // Learning (topic) Text
 struct Learningtopic: View {
     @AppStorage("topic") private var topic: String = ""
@@ -208,6 +103,7 @@ struct Learningtopic: View {
             .padding(.horizontal)
     }
 }
+
 //Navigation bar
 struct CurrentNavigation: View {
     var body: some View {
@@ -233,191 +129,192 @@ struct CurrentNavigation: View {
     }
 }
 
-//Calendar Struct
-struct CalendarHorizontalView: View {
-    @ObservedObject var viewModel: CalendarViewModel
+//Calendar HorizontalStruct
+    struct CalendarHorizontalView: View {
+        @ObservedObject var viewModel: CalendarViewModel
 
-    @State private var currentDate = Date()
-    // Keep a Date for the weekly view base
-    @State private var date = Date()
-    @State private var showingDatePicker = false
+        @State private var currentDate = Date()
+        // Keep a Date for the weekly view base
+        @State private var date = Date()
+        @State private var showingDatePicker = false
 
-    // Custom month/year wheel state
-    @State private var selectedMonth: Int = Calendar.current.component(.month, from: Date()) - 1 // 0...11
-    @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
- 
-    private var monthYear: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM yyyy"
-        return formatter.string(from: currentDate)
-    }
-    
-    private var weekDays: [String] {
-        let formatter = DateFormatter()
-        return formatter.shortWeekdaySymbols // ["Sun","Mon",...]
-    }
-    
-    private var weekDates: [Date] {
-        let calendar = Calendar.current
-        let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: currentDate))!
-        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: startOfWeek) }
-    }
-    
-    var body: some View {
-        VStack {
-            HStack {
-                Text(monthYear).bold()
-                Button(action: {
-                    // Initialize wheels from currentDate whenever opening
-                    let comps = Calendar.current.dateComponents([.year, .month], from: currentDate)
-                    selectedMonth = (comps.month ?? 1) - 1
-                    selectedYear = comps.year ?? selectedYear
-                    showingDatePicker = true
-                }) {
-                    Image(systemName: showingDatePicker ? "chevron.down" : "chevron.right")
-                        .foregroundColor(.orange)
-                        .bold()
-                }
-                .popover(isPresented: $showingDatePicker, arrowEdge: .top) {
-                    VStack(spacing: 16) {
-                        HStack(spacing:0) {
-                            // Month wheel
-                            Picker("Month", selection: $selectedMonth) {
-                                ForEach(0..<12, id: \.self) { index in
-                                    Text(DateFormatter().monthSymbols[index]).tag(index)
-                                }
-                            }
-                            .pickerStyle(.wheel)
-                            .frame(maxWidth: .infinity)
-
-                            // Year wheel (before 2025 and forward, default to current year)
-                            let currentYear = Calendar.current.component(.year, from: Date())
-                            let lowerBoundYear = 1900 // adjust as needed
-                            Picker("Year", selection: $selectedYear) {
-                                ForEach(lowerBoundYear...(currentYear + 50), id: \.self) { year in
-                                    // Force plain string to avoid locale grouping separators like "2,025"
-                                    Text(String(year)).tag(year)
-                                }
-                            }
-                            .pickerStyle(.wheel)
-                            .frame(maxWidth: .infinity)
-                        }
-                        .labelsHidden()
-                        .onChange(of: selectedMonth) { _, _ in
-                            applyMonthYearSelection()
-                        }
-                        .onChange(of: selectedYear) { _, _ in
-                            applyMonthYearSelection()
-                        }
-                    }
-                    .presentationCompactAdaptation(.popover)
-                    .padding()
-                }
-                Spacer()
-                
-                Button(action: { moveMonth(-1) }) {
-                    Image(systemName: "chevron.left")
-                        .foregroundColor(.orange)
-                        .bold()
-                }
-                Spacer().frame(width: 28)
-                
-                Button(action: { moveMonth(1) }) {
-                    Image(systemName: "chevron.right")
-                        .foregroundColor(.orange)
-                        .bold()
-                }
-            }
-            
-            Spacer().frame(height: 15)
-            
-            HStack(spacing: 9) {
-                ForEach(0..<7, id: \.self) { index in
-                    let date = weekDates[index]
-                    let status = viewModel.status(for: date)
-
-                    VStack {
-                        Text(weekDays[Calendar.current.component(.weekday, from: date) - 1])
-                            .foregroundColor(Color.greyish)
-                            .bold()
-                            .font(.subheadline)
-
-                        // Match AllActivities circles and styles
-                        switch status {
-                        case .todayPending:
-                            ZStack {
-                                Circle()
-                                    .frame(width: 44, height: 44)
-                                    .foregroundStyle(Color.orangecircle)
-                                Text("\(Calendar.current.component(.day, from: date))")
-                                    .font(.system(size: 25, weight: .medium))
-                                    .foregroundStyle(.white)
-                            }
-
-                        case .learned:
-                            ZStack {
-                                Circle()
-                                    .frame(width: 44, height: 44)
-                                    .foregroundStyle(Color.darkOrange)
-                                Text("\(Calendar.current.component(.day, from: date))")
-                                    .font(.system(size: 25, weight: .medium))
-                                    .foregroundStyle(Color.orangecircle)
-                            }
-
-                        case .frozen:
-                            ZStack {
-                                Circle()
-                                    .frame(width: 44, height: 44)
-                                    .foregroundStyle(Color.darkTurqoise)
-                                Text("\(Calendar.current.component(.day, from: date))")
-                                    .font(.system(size: 25, weight: .medium))
-                                    .foregroundStyle(Color.turqoisey)
-                            }
-
-                        case .none:
-                            Text("\(Calendar.current.component(.day, from: date))")
-                                .bold()
-                                .font(.system(size: 25))
-                                .frame(width: 44, height: 44)
-                              
-                        }
-                    }
-                }
-            }
+        // Custom month/year wheel state
+        @State private var selectedMonth: Int = Calendar.current.component(.month, from: Date()) - 1 // 0...11
+        @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
+     
+        private var monthYear: String {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMMM yyyy"
+            return formatter.string(from: currentDate)
         }
-        .padding()
         
-        .onChange(of: currentDate) { _, newValue in
-            date = firstDayOfMonth(for: newValue)
+        private var weekDays: [String] {
+            let formatter = DateFormatter()
+            return formatter.shortWeekdaySymbols // ["Sun","Mon",...]
         }
-    }
-    
-    private func moveMonth(_ value: Int) {
-        if let newDate = Calendar.current.date(byAdding: .weekOfYear, value: value, to: currentDate) {
-            currentDate = newDate
+        
+        private var weekDates: [Date] {
+            let calendar = Calendar.current
+            let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: currentDate))!
+            return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: startOfWeek) }
         }
-    }
-    
-    private func firstDayOfMonth(for date: Date) -> Date {
-        let calendar = Calendar.current
-        let comps = calendar.dateComponents([.year, .month], from: date)
-        return calendar.date(from: comps) ?? date
-    }
+        
+        var body: some View {
+            VStack {
+                HStack {
+                    // ------Calendar Wheel Popover------
+                    Text(monthYear).bold()
+                    Button(action: {
+                     
 
-    private func applyMonthYearSelection() {
-        var comps = DateComponents()
-        comps.year = selectedYear
-        comps.month = selectedMonth + 1 // DateComponents months are 1-based
-        comps.day = 1
-        if let composed = Calendar.current.date(from: comps) {
-            currentDate = composed
+                        let comps = Calendar.current.dateComponents([.year, .month], from: currentDate)
+                        selectedMonth = (comps.month ?? 1) - 1
+                        selectedYear = comps.year ?? selectedYear
+                        showingDatePicker = true
+                    }) {
+                        Image(systemName: showingDatePicker ? "chevron.down" : "chevron.right")
+                            .foregroundColor(.orange)
+                            .bold()
+                    }
+                    .popover(isPresented: $showingDatePicker, arrowEdge: .top) {
+                        VStack(spacing: 16) {
+                            HStack(spacing:0) {
+                                // Month wheel
+                                Picker("Month", selection: $selectedMonth) {
+                                    ForEach(0..<12, id: \.self) { index in
+                                        Text(DateFormatter().monthSymbols[index]).tag(index)
+                                    }
+                                }
+                                .pickerStyle(.wheel)
+                                .frame(maxWidth: .infinity)
+
+                                let currentYear = Calendar.current.component(.year, from: Date())
+                                let lowerBoundYear = 1900 // adjust as needed
+                                Picker("Year", selection: $selectedYear) {
+                                    ForEach(lowerBoundYear...(currentYear + 50), id: \.self) { year in
+                                        // Force plain string to avoid locale grouping separators like "2,025"
+                                        Text(String(year)).tag(year)
+                                    }
+                                }
+                                .pickerStyle(.wheel)
+                                .frame(maxWidth: .infinity)
+                            }
+                            .labelsHidden()
+                            .onChange(of: selectedMonth) { _, _ in
+                                applyMonthYearSelection()
+                            }
+                            .onChange(of: selectedYear) { _, _ in
+                                applyMonthYearSelection()
+                            }
+                        }
+                        .presentationCompactAdaptation(.popover)
+                        .padding()
+                    }
+                    Spacer()
+                    
+                    Button(action: { moveMonth(-1) }) {
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(.orange)
+                            .bold()
+                    }
+                    Spacer().frame(width: 28)
+                    
+                    Button(action: { moveMonth(1) }) {
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.orange)
+                            .bold()
+                    }
+                }
+                
+                Spacer().frame(height: 15)
+                
+                HStack(spacing: 9) {
+                    ForEach(0..<7, id: \.self) { index in
+                        let date = weekDates[index]
+                        let status = viewModel.status(for: date)
+
+                        VStack {
+                            Text(weekDays[Calendar.current.component(.weekday, from: date) - 1])
+                                .foregroundColor(Color.greyish)
+                                .bold()
+                                .font(.subheadline)
+
+                            // Match AllActivities circles and styles
+                            switch status {
+                            case .todayPending:
+                                ZStack {
+                                    Circle()
+                                        .frame(width: 44, height: 44)
+                                        .foregroundStyle(Color.orangecircle)
+                                    Text("\(Calendar.current.component(.day, from: date))")
+                                        .font(.system(size: 25, weight: .medium))
+                                        .foregroundStyle(.white)
+                                }
+
+                            case .learned:
+                                ZStack {
+                                    Circle()
+                                        .frame(width: 44, height: 44)
+                                        .foregroundStyle(Color.darkOrange)
+                                    Text("\(Calendar.current.component(.day, from: date))")
+                                        .font(.system(size: 25, weight: .medium))
+                                        .foregroundStyle(Color.orangecircle)
+                                }
+
+                            case .frozen:
+                                ZStack {
+                                    Circle()
+                                        .frame(width: 44, height: 44)
+                                        .foregroundStyle(Color.darkTurqoise)
+                                    Text("\(Calendar.current.component(.day, from: date))")
+                                        .font(.system(size: 25, weight: .medium))
+                                        .foregroundStyle(Color.turqoisey)
+                                }
+
+                            case .none:
+                                Text("\(Calendar.current.component(.day, from: date))")
+                                    .bold()
+                                    .font(.system(size: 25))
+                                    .frame(width: 44, height: 44)
+                                  
+                            }
+                        }
+                    }
+                }
+            }
+            .padding()
+            
+            .onChange(of: currentDate) { _, newValue in
+                date = firstDayOfMonth(for: newValue)
+            }
+        }
+        
+        private func moveMonth(_ value: Int) {
+            if let newDate = Calendar.current.date(byAdding: .weekOfYear, value: value, to: currentDate) {
+                currentDate = newDate
+            }
+        }
+        
+        private func firstDayOfMonth(for date: Date) -> Date {
+            let calendar = Calendar.current
+            let comps = calendar.dateComponents([.year, .month], from: date)
+            return calendar.date(from: comps) ?? date
+        }
+
+        private func applyMonthYearSelection() {
+            var comps = DateComponents()
+            comps.year = selectedYear
+            comps.month = selectedMonth + 1 // DateComponents months are 1-based
+            comps.day = 1
+            if let composed = Calendar.current.date(from: comps) {
+                currentDate = composed
+            }
         }
     }
-}
 
 //Days Learned Struct
 struct DaysLearned: View{
-    // Keep showing the synchronized counter (synced from learnDates.count)
+    // Keep showing the synchronized counter (synced from view model via AppStorage)
     @AppStorage("daysLearnedCount") var daysLearnedCount: Int = 0
 
     var body: some View{
@@ -439,9 +336,8 @@ struct DaysLearned: View{
 
 //Days Freezed Struct
 struct DaysFreezed: View{
-    // Keep showing the synchronized counter (synced from freezeDates.count)
+    // Keep showing the synchronized counter (synced from view model via AppStorage)
     @AppStorage("freezesUsedCount") var freezesUsedCount = 0
-    @AppStorage("freezes") var freezes: Int = 2
 
     var body: some View{
         HStack{
@@ -461,17 +357,13 @@ struct DaysFreezed: View{
 
 // ---------HUGE BUTTONS---------
 
-//Log as Learned button
+//Log as Learned button (calls VM action)
 struct LearnedBIGbutton : View{
-    // We receive learnDates via Binding so we can update the array and let parent sync counts.
-    @Binding var learnDates: [String]
+    var action: () -> Void
 
     var body: some View{
         Button("Log as\nLearned") {
-            let key = todayKey()
-            if !learnDates.contains(key) {
-                learnDates.append(key)
-            }
+            action()
         }
         .bold()
         .foregroundStyle(Color.white)
@@ -489,7 +381,7 @@ struct LearnedBIGbutton : View{
 struct LearnedTodayBIGbutton : View{
     var body: some View{
         Button("Learned\nToday") {
-            // no-op; already logged for today
+            // no-op
         }
         .bold()
         .foregroundStyle(Color.orange)
@@ -507,7 +399,7 @@ struct LearnedTodayBIGbutton : View{
 struct DayFreezedBIGbutton : View{
     var body: some View{
         Button("Day\nFreezed") {
-            // no-op; already frozen for today
+            // no-op
         }
         .bold()
         .foregroundStyle(Color.turqoisey)
@@ -545,29 +437,13 @@ struct WellDone: View{
 
 // ---------SMALL BUTTON---------
 
-// Helper for stable yyyy-MM-dd key
-private func todayKey() -> String {
-    let formatter = DateFormatter()
-    formatter.calendar = Calendar.current
-    formatter.locale = .current
-    formatter.timeZone = .current
-    formatter.dateFormat = "yyyy-MM-dd"
-    return formatter.string(from: Date())
-}
-
 //Log as freezed (enabled)
 struct Freezedbutton: View {
-    // Receive and update the array; parent keeps counts in sync
-    @Binding var freezeDates: [String]
-    var freezesLimit: Int
+    var action: () -> Void
 
     var body: some View {
         Button("Log as Freezed") {
-            let key = todayKey()
-            guard freezeDates.count < freezesLimit else { return }
-            if !freezeDates.contains(key) {
-                freezeDates.append(key)
-            }
+            action()
         }
         .foregroundStyle(Color.white)
         .font(.system(size: 17))
@@ -603,7 +479,6 @@ struct SetlearningGoal: View {
 }
 
 // Text of remaining freezes 
-// Converted to a standalone view function so we can pass the used count from arrays
 @ViewBuilder
 private func freezesUsedView(usedCount: Int, total: Int) -> some View {
     let usedWord = usedCount == 1 ? "Freeze" : "Freezes"
@@ -617,4 +492,3 @@ private func freezesUsedView(usedCount: Int, total: Int) -> some View {
 #Preview {
     CurrentdayView().preferredColorScheme(.dark)
 }
-

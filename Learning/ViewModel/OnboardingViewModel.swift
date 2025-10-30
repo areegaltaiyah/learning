@@ -47,7 +47,7 @@ final class OnboardingViewModel: ObservableObject {
     }
 
     // Call this when user confirms "Update" in LearningGoalView
-    func commitGoalUpdateAndResetProgress() {
+    func resetProgress() {
         // Reset learning streak/progress
         daysLearnedCount = 0
         lastLearnDate = ""

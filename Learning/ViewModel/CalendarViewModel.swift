@@ -5,13 +5,6 @@
 //  Created by Areeg Altaiyah on 29/04/1447 AH.
 //
 
-//
-//  CalendarViewModel.swift
-//  Learning Tracking App
-//
-//  Created by Suhaylah hawsawi on 27/04/1447 AH.
-//
-
 import Foundation
 import SwiftUI
 import Combine
@@ -30,9 +23,9 @@ class CalendarViewModel: ObservableObject {
     @AppStorage("lastLearnDate") private var lastLearnDate: String = ""
     @AppStorage("lastFreezeDate") private var lastFreezeDate: String = ""
 
-    // New history arrays (as JSON Data of [String] keys "yyyy-MM-dd")
-    @AppStorage("learnDatesData") private var learnDatesData: Data = Data()
-    @AppStorage("freezeDatesData") private var freezeDatesData: Data = Data()
+    // New history arrays (comma-separated String of keys "yyyy-MM-dd")
+    @AppStorage("learnDatesString") private var learnDatesString: String = ""
+    @AppStorage("freezeDatesString") private var freezeDatesString: String = ""
 
     private let calendar = Calendar.current
 
@@ -53,19 +46,17 @@ class CalendarViewModel: ObservableObject {
         return formatter
     }()
 
-    // Decoding helpers
-    private func decodeArray(_ data: Data) -> [String] {
-        (try? JSONDecoder().decode([String].self, from: data)) ?? []
+    // Simple split helpers
+    private func splitDates(_ s: String) -> [String] {
+        s.split(separator: ",").map { String($0) }
     }
 
     // Computed Sets for fast lookup
     private var learnedSet: Set<String> {
-        let arr = decodeArray(learnDatesData)
-        return Set(arr)
+        Set(splitDates(learnDatesString))
     }
     private var frozenSet: Set<String> {
-        let arr = decodeArray(freezeDatesData)
-        return Set(arr)
+        Set(splitDates(freezeDatesString))
     }
 
     var months: [Date] {

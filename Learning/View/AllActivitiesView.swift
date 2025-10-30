@@ -14,6 +14,7 @@ struct ScrollingCalendarView: View {
     var body: some View {
         NavigationStack {
             ScrollView(.vertical, showsIndicators: false) {
+                // ------Calendar UI------
                 VStack(spacing: 0) {
                     ForEach(Array(viewModel.months.enumerated()), id: \.offset) { (_, monthStart) in
                         CalendarMonthView(viewModel: viewModel, monthStart: monthStart)
@@ -31,6 +32,8 @@ struct ScrollingCalendarView: View {
                 }
                 .padding(.top,17.9)
             }
+            // ------NAVIGATION------
+
             .navigationTitle(Text("All activities")
                 .font(.system(size: 90, weight: .semibold)))
             .navigationBarTitleDisplayMode(.inline)
@@ -52,6 +55,8 @@ struct ScrollingCalendarView: View {
         }
     }
 }
+
+// ------STRUCTS-----
 
 struct CalendarMonthView: View {
     let viewModel: CalendarViewModel
@@ -98,62 +103,72 @@ struct CalendarDayView: View {
                 .frame(maxWidth: .infinity)
         } else {
             let status = viewModel.status(for: date)
-
-            switch status {
-            case .todayPending:
-                ZStack {
-                    Circle()
-                        .frame(width: 40, height: 40)
-                        .foregroundStyle(Color.orangecircle)
-                        .glassEffect()
-                    Text("\(viewModel.dayNumber(from: date))")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundStyle(.white)
-                }
-                .frame(maxWidth: .infinity)
-
-            case .learned:
-             //   if viewModel.isToday(date) {
-                    // Learned today circle
-                    ZStack {
-                        Circle()
-                            .frame(width: 40, height: 40)
-                            .foregroundStyle(Color.darkOrange)
-                            .glassEffect()
-                        Text("\(viewModel.dayNumber(from: date))")
-                            .font(.system(size: 24, weight: .medium))
-                            .foregroundStyle(.orangecircle)
-                    }
-                    .frame(maxWidth: .infinity)
-                //}
-//                else {
-//                    // Other learned days: white text (as you had)
-//                    Text("\(viewModel.dayNumber(from: date))")
-//                        .font(.system(size: 24, weight: .medium))
-//                        .frame(maxWidth: .infinity)
-//                        .foregroundStyle(.white)
-//                }
-
-            case .frozen:
-                // Frozen day: turqoisey circle
-                ZStack {
-                    Circle()
-                        .frame(width: 40, height: 40)
-                        .foregroundStyle(Color.darkTurqoise)
-                        .glassEffect()
-                    Text("\(viewModel.dayNumber(from: date))")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundStyle(Color.turqoisey)
-                }
-                .frame(maxWidth: .infinity)
-
-            case .none:
-                Text("\(viewModel.dayNumber(from: date))")
-                    .font(.system(size: 24, weight: .medium))
-                    .frame(maxWidth: .infinity)
-                    .foregroundStyle(.primary)
-            }
+            DayStatusBadge(
+                status: status,
+                dayNumber: viewModel.dayNumber(from: date),
+                size: 40
+            )
+            .frame(maxWidth: .infinity)
         }
+    }
+}
+
+// ------Reusable status badge------
+
+struct DayStatusBadge: View {
+    let status: DayStatus
+    let dayNumber: Int
+    let size: CGFloat
+
+    var body: some View {
+        switch status {
+        case .todayPending:
+            ZStack {
+                Circle()
+                    .frame(width: size, height: size)
+                    .foregroundStyle(Color.orangecircle)
+                    .glassEffect()
+                Text("\(dayNumber)")
+                    .font(.system(size: fontSize, weight: .medium))
+                    .foregroundStyle(.white)
+            }
+
+        case .learned:
+            ZStack {
+                Circle()
+                    .frame(width: size, height: size)
+                    .foregroundStyle(Color.darkOrange)
+                    .glassEffect()
+                Text("\(dayNumber)")
+                    .font(.system(size: fontSize, weight: .medium))
+                    .foregroundStyle(Color.orangecircle)
+            }
+
+        case .frozen:
+            ZStack {
+                Circle()
+                    .frame(width: size, height: size)
+                    .foregroundStyle(Color.darkTurqoise)
+                    .glassEffect()
+                Text("\(dayNumber)")
+                    .font(.system(size: fontSize, weight: .medium))
+                    .foregroundStyle(Color.turqoisey)
+            }
+
+        case .none:
+            Text("\(dayNumber)")
+                .font(.system(size: fontSize, weight: .medium))
+                .foregroundStyle(.primary)
+                .frame(width: size, height: size)
+        }
+    }
+
+    // Simple mapping to keep text size visually balanced with circle size
+    private var fontSize: CGFloat {
+        // Original designs used 24 for 40pt, 25 for 44pt; keep close
+        if size <= 40 { return 24 }
+        if size <= 44 { return 25 }
+        return max(24, size * 0.6)
     }
 }
 
