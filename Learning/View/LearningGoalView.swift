@@ -2,8 +2,9 @@ import SwiftUI
 
 struct LearningGoalView: View {
     @EnvironmentObject private var onboardingVM: OnboardingViewModel
+    @Environment(\.dismiss) private var dismiss
+
     @State private var navigateBack = false
-    @State private var navigateNext = false
     @State private var showCheckAlert = false
 
     var body: some View {
@@ -22,13 +23,11 @@ struct LearningGoalView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(
                         action: {
-                            navigateBack = true
+                            // Dismiss back to CurrentdayView
+                            dismiss()
                         }) {
                             Image(systemName: "chevron.left")
                                 .foregroundColor(.white)
-                        }
-                        .navigationDestination(isPresented: $navigateBack){
-                            CurrentdayView().navigationBarBackButtonHidden(true)
                         }
                 }
                 ToolbarItem(placement:.navigationBarTrailing){
@@ -63,7 +62,8 @@ struct LearningGoalView: View {
                     defaults.set(0, forKey: "daysLearnedCount")
                     defaults.set(0, forKey: "freezesUsedCount")
 
-                    navigateNext = true
+                    // Pop back to CurrentdayView so it reappears and recomputes UI
+                    dismiss()
                 }
             } message: {
                 Text("If you update now, your streak will start over.")
@@ -77,4 +77,3 @@ struct LearningGoalView: View {
         .preferredColorScheme(.dark)
         .environmentObject(OnboardingViewModel())
 }
-
