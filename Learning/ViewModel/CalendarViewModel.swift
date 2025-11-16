@@ -19,11 +19,7 @@ enum DayStatus {
 class CalendarViewModel: ObservableObject {
     @Published var currentDate: Date = Date()
 
-    // Legacy single-day markers (kept for backward compatibility)
-    @AppStorage("lastLearnDate") private var lastLearnDate: String = ""
-    @AppStorage("lastFreezeDate") private var lastFreezeDate: String = ""
-
-    // New history arrays (comma-separated String of keys "yyyy-MM-dd")
+    // Single source of truth: CSV histories
     @AppStorage("learnDatesString") private var learnDatesString: String = ""
     @AppStorage("freezeDatesString") private var freezeDatesString: String = ""
 
@@ -134,24 +130,12 @@ class CalendarViewModel: ObservableObject {
     func status(for date: Date) -> DayStatus {
         let k = key(for: date)
 
-        // Prefer array-backed history (all learned/frozen days)
+        // Use array-backed history only
         let learned = learnedSet
         let frozen = frozenSet
 
-        if learned.contains(k) {
-            return .learned
-        }
-        if frozen.contains(k) {
-            return .frozen
-        }
-
-        // Backward compatibility: if arrays are empty, fall back to legacy single-date keys
-        if learned.isEmpty && k == lastLearnDate {
-            return .learned
-        }
-        if frozen.isEmpty && k == lastFreezeDate {
-            return .frozen
-        }
+        if learned.contains(k) { return .learned }
+        if frozen.contains(k) { return .frozen }
 
         if k == todayKey {
             // Today and neither learned nor frozen yet -> pending

@@ -4,19 +4,16 @@ import Combine
 @MainActor
 final class CurrentDayViewModel: ObservableObject {
 
-    // Storage
-    @AppStorage("lastFreezeDate") private var lastFreezeDate: String = ""
-    @AppStorage("freezesUsedCount") private var freezesUsedCountStorage: Int = 0
-    @AppStorage("freezes") var freezesLimit: Int = 2
-
-    @AppStorage("lastLearnDate") private var lastLearnDate: String = ""
-    @AppStorage("daysLearnedCount") private var daysLearnedCountStorage: Int = 0
-
+    // Single source of truth: CSV histories
     @AppStorage("freezeDatesString") private var freezeDatesString: String = ""
     @AppStorage("learnDatesString") private var learnDatesString: String = ""
 
-    @AppStorage("didMigrateSingleDatesToArrays") private var didMigrateSingleDatesToArrays: Bool = false
+    // Settings
+    @AppStorage("freezes") var freezesLimit: Int = 2
     @AppStorage("topic") var topic: String = ""
+
+    // Inactivity tracking (shared key with OnboardingViewModel)
+    @AppStorage("lastActivityTime") private var lastActivityTime: Double = 0
 
     // Published UI-facing state
     @Published private(set) var todayState: TodayState = .normal
@@ -40,7 +37,6 @@ final class CurrentDayViewModel: ObservableObject {
     }
 
     init() {
-        migrateIfNeeded()
         syncCountersFromArrays()
         recomputeTodayState()
     }
@@ -54,8 +50,8 @@ final class CurrentDayViewModel: ObservableObject {
         updated.append(key)
         learnDates = updated
 
-        // Legacy compatibility
-        lastLearnDate = key
+        // Mark activity
+        lastActivityTime = Date().timeIntervalSince1970
 
         recomputeTodayState()
     }
@@ -68,8 +64,8 @@ final class CurrentDayViewModel: ObservableObject {
         updated.append(key)
         freezeDates = updated
 
-        // Legacy compatibility
-        lastFreezeDate = key
+        // Mark activity
+        lastActivityTime = Date().timeIntervalSince1970
 
         recomputeTodayState()
     }
@@ -92,39 +88,16 @@ final class CurrentDayViewModel: ObservableObject {
     private func syncCountersFromArrays() {
         daysLearnedCount = learnDates.count
         freezesUsedCount = freezeDates.count
-
-        // Keep legacy counters in sync
-        daysLearnedCountStorage = daysLearnedCount
-        freezesUsedCountStorage = freezesUsedCount
-
-        // Keep legacy last dates in sync
-        if let last = learnDates.last { lastLearnDate = last }
-        if let last = freezeDates.last { lastFreezeDate = last }
     }
 
-    // MARK: - Migration
-
-    private func migrateIfNeeded() {
-        guard !didMigrateSingleDatesToArrays else { return }
-
-        var updatedFreeze = freezeDates
-        var updatedLearn = learnDates
-
-        if !lastFreezeDate.isEmpty && !updatedFreeze.contains(lastFreezeDate) {
-            updatedFreeze.append(lastFreezeDate)
-        }
-        if !lastLearnDate.isEmpty && !updatedLearn.contains(lastLearnDate) {
-            updatedLearn.append(lastLearnDate)
-        }
-
-        if updatedFreeze != freezeDates {
-            freezeDates = updatedFreeze
-        }
-        if updatedLearn != learnDates {
-            learnDates = updatedLearn
-        }
-
-        didMigrateSingleDatesToArrays = true
+    // Expose a refresh so views can pull latest from AppStorage after external resets
+    func refreshFromStorage() {
+        // Re-read arrays via getters (which read the AppStorage strings),
+        // then update counters and state.
+        _ = learnDates
+        _ = freezeDates
+        syncCountersFromArrays()
+        recomputeTodayState()
     }
 }
 

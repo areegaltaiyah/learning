@@ -44,23 +44,8 @@ struct LearningGoalView: View {
             .alert("Update learning goal", isPresented: $showCheckAlert) {
                 Button("Dismiss", role: .cancel) { }
                 Button("Update") {
-                    // Keep your existing update logic
-                    onboardingVM.resetProgress()
-
-                    // Ensure progress resets with the new string-backed storage used by CurrentdayView
-                    let defaults = UserDefaults.standard
-
-                    // Clear learned and freeze histories (comma-separated String for [String])
-                    defaults.set("", forKey: "learnDatesString")
-                    defaults.set("", forKey: "freezeDatesString")
-
-                    // Clear legacy single-date keys (optional but keeps things consistent)
-                    defaults.set("", forKey: "lastLearnDate")
-                    defaults.set("", forKey: "lastFreezeDate")
-
-                    // Reset counters so UI reflects immediately even without navigating
-                    defaults.set(0, forKey: "daysLearnedCount")
-                    defaults.set(0, forKey: "freezesUsedCount")
+                    // Single-source reset
+                    onboardingVM.resetAll()
 
                     // Pop back to CurrentdayView so it reappears and recomputes UI
                     dismiss()

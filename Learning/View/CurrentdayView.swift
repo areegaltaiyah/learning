@@ -36,8 +36,12 @@ struct CurrentdayView: View {
                 CurrentNavigation()
                 Spacer().frame(height: 24)
 
-                // Card
-                CurrentCard(viewModel: calendarVM)
+                
+                CurrentCard(
+                    viewModel: calendarVM,
+                    daysLearned: currentDayvm.daysLearnedCount,
+                    daysFrozen: currentDayvm.freezesUsedCount
+                )
                 
                 Spacer().frame(height: 32)
                 
@@ -63,7 +67,7 @@ struct CurrentdayView: View {
                 // SMALL BUTTON
                 
                 if goalCompleted {
-                    SetlearningGoal()
+                    SetlearningGoal(currentDayvm: currentDayvm)
                 } else {
                     switch currentDayvm.todayState {
                     case .normal:
@@ -83,19 +87,23 @@ struct CurrentdayView: View {
                     )
                 }
             }
+            
+            
+            // for immediete refresh
             .onAppear {
-                currentDayvm.recomputeTodayState()
+                // Pull latest from AppStorage whenever this view appears
+                currentDayvm.refreshFromStorage()
             }
             // If goal duration changes, recompute the state
             .onChange(of: selectedDuration) { _, _ in
                 currentDayvm.recomputeTodayState()
             }
-            // If histories are reset in LearningGoalView, recompute and the UI will switch back from "Well Done"
+            // If histories are reset in LearningGoalView, refresh counters and state so UI flips back from "Well Done"
             .onChange(of: learnDatesString) { _, _ in
-                currentDayvm.recomputeTodayState()
+                currentDayvm.refreshFromStorage()
             }
             .onChange(of: freezeDatesString) { _, _ in
-                currentDayvm.recomputeTodayState()
+                currentDayvm.refreshFromStorage()
             }
             // Also observe counters directly to ensure immediate UI updates
             .onChange(of: currentDayvm.daysLearnedCount) { _, _ in

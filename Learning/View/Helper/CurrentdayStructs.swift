@@ -11,6 +11,8 @@ import SwiftUI
 //Card Struct
 struct CurrentCard: View {
     let viewModel: CalendarViewModel
+    let daysLearned: Int
+    let daysFrozen: Int
 
     var body: some View {
         GlassEffectContainer {
@@ -26,12 +28,12 @@ struct CurrentCard: View {
                     HStack{
                         Spacer()
                         //Days learned
-                        DaysLearned()
+                        DaysLearned(count: daysLearned)
                         
                         Spacer().frame(width:13)
 
                         //Days freezed
-                        DaysFreezed()
+                        DaysFreezed(count: daysFrozen)
                         Spacer()
                     }
                     Spacer().frame(height: 12)
@@ -266,17 +268,16 @@ struct CurrentNavigation: View {
 
 //Days Learned Struct
 struct DaysLearned: View{
- 
-    @AppStorage("daysLearnedCount") var daysLearnedCount: Int = 0
+    let count: Int
 
     var body: some View{
         HStack{
             Spacer().frame(width: 12)
             Image(systemName: "flame.fill").foregroundStyle(Color.orange).font(Font.system(size: 20))
             VStack(alignment:.leading){
-                Text("\(daysLearnedCount)").bold().font(.system(size: 24))
+                Text("\(count)").bold().font(.system(size: 24))
                 
-                Text(daysLearnedCount == 1 ? "Day Learned" : "Days Learned").font(.system(size: 12))
+                Text(count == 1 ? "Day Learned" : "Days Learned").font(.system(size: 12))
                 Spacer().frame(height: 6)
             }.frame(width: 78,height: 49)
             Spacer().frame(width: 12)
@@ -288,16 +289,15 @@ struct DaysLearned: View{
 
 //Days Freezed Struct
 struct DaysFreezed: View{
-    
-    @AppStorage("freezesUsedCount") var freezesUsedCount = 0
+    let count: Int
 
     var body: some View{
         HStack{
             Spacer().frame(width: 14)
             Image(systemName: "cube.fill").foregroundStyle(Color.turqoisey).font(Font.system(size: 20))
             VStack(alignment:.leading){
-                Text("\(freezesUsedCount)").bold().font(.system(size: 24))
-                Text(freezesUsedCount == 1 ? "Day Freezed" : "Days Freezed").font(.system(size: 12))
+                Text("\(count)").bold().font(.system(size: 24))
+                Text(count == 1 ? "Day Freezed" : "Days Freezed").font(.system(size: 12))
                 Spacer().frame(height: 6)
             }.frame(width: 78,height: 49)
             Spacer().frame(width: 14)
@@ -416,9 +416,10 @@ struct FreezedbuttonOFF : View{
         .glassEffect(.regular.tint(Color.darkTurqoise.opacity(0.4)).interactive())
     }
 }
-
 //Set a new learning goal
 struct SetlearningGoal: View {
+    @ObservedObject var currentDayvm: CurrentDayViewModel
+    @EnvironmentObject private var onboardingVM: OnboardingViewModel
     var body: some View{
         NavigationLink {
             LearningGoalView()
@@ -429,6 +430,15 @@ struct SetlearningGoal: View {
                 .frame(width: 274,height:48)
                 .glassEffect(.regular.tint(Color.orangey.opacity(0.95)).interactive())
         }
-        Text("Set Same learning goal and duration")
-        .foregroundStyle(Color.orange)    }
+
+        Button("Set Same learning goal and duration") {
+            // Single-source reset
+            onboardingVM.resetAll()
+
+            // Immediately refresh the CurrentDayViewModel so UI flips back to buttons
+            currentDayvm.refreshFromStorage()
+            currentDayvm.recomputeTodayState()
+        }
+        .foregroundStyle(Color.orange)
+    }
 }
